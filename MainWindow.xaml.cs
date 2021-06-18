@@ -26,6 +26,7 @@ namespace imageSorter
         private System.Collections.Generic.List<System.IO.FileInfo> imageFiles;
         private System.IO.FileInfo imageFile;
         private int imageFileIndex;
+        private Random rand;
         private TransformedBitmap bitmapImage;
         private Dictionary<Key, string[]> keyMap = new Dictionary<Key, string[]>();
 
@@ -33,10 +34,29 @@ namespace imageSorter
         {
             InitializeComponent();
             KeyDown += OnKeyDown;
+            AddKey("NumPad1", @"D:\wallpapers\0 - very nsfw", @"D:\Phone Wallpapers\unprocessed\photo\6-verynsfw");
+            AddKey("NumPad2", @"D:\wallpapers\2 - nsfw", @"D:\Phone Wallpapers\unprocessed\photo\5-nsfw");
+            AddKey("NumPad3", @"D:\wallpapers\3 - sorta nsfw", @"D:\Phone Wallpapers\unprocessed\photo\4-sortansfw");
+            AddKey("NumPad4", @"D:\wallpapers\1 - hentai", @"D:\Phone Wallpapers\unprocessed\illust\6-verynsfw");
+            AddKey("NumPad5", @"D:\wallpapers\2 - nsfw", @"D:\Phone Wallpapers\unprocessed\illust\5-nsfw");
+            AddKey("NumPad6", @"D:\wallpapers\3 - sorta nsfw", @"D:\Phone Wallpapers\unprocessed\illust\4-sortansfw");
             Key key;
-            if(Enum.TryParse("1", out key))
+            if(Enum.TryParse("NumPad0", out key))
             {
-                keyMap.Add(key, new string[] { @"C:\Users\Taylor\Desktop\landscape", @"C:\Users\Taylor\Desktop\portrait" });
+                keyMap.Add(key, new string[] {"delete"});
+            }
+            if(Enum.TryParse("Enter", out key))
+            {
+                keyMap.Add(key, new string[] {"skip"});
+            }
+        }
+
+        private void AddKey(string keyStr, string pathLandscape, string pathPortrait)
+        {
+            Key key;
+            if(Enum.TryParse(keyStr, out key))
+            {
+                keyMap.Add(key, new string[] { pathLandscape, pathPortrait });
             }
         }
 
@@ -60,13 +80,23 @@ namespace imageSorter
             var validExtensions = new List<string> { "bmp", "jpg", "jpeg", "png", "gif" };
             var dirInfo = new DirectoryInfo(selectedPath);
             imageFiles = (from file in dirInfo.GetFiles("*.*", SearchOption.AllDirectories) where validExtensions.Contains(file.Extension.Replace(".", "").ToLower()) select new FileInfo(file.FullName)).ToList();
-            imageFileIndex = 0;
-            imageFile = imageFiles[imageFileIndex];
+//            imageFileIndex = 0;
+//            imageFile = imageFiles[imageFileIndex];
+        }
+
+        private void GetRandomImage()
+        {
+            imageFile = imageFiles[rand.Next(imageFiles.Count())];
         }
 
         private void LoadImage()
         {
-            bitmapImage = new TransformedBitmap(new BitmapImage(new Uri(imageFile.FullName)), new RotateTransform(GetRotation(imageFile.FullName)));
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(imageFile.FullName);
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmapImage = new TransformedBitmap(bitmap, new RotateTransform(GetRotation(imageFile.FullName)));
             image.Source = bitmapImage;
         }
 
@@ -82,6 +112,25 @@ namespace imageSorter
                 return;
             }
 
+            if(keyMap[e.Key].Length == 1)
+            {
+                if(keyMap[e.Key][0] == "delete")
+                {
+                    DeleteImage();
+                    return;
+                }
+                else if (keyMap[e.Key][0] == "skip")
+                {
+                    LoadNextImage();
+                    return;
+                }
+            }
+
+            if(keyMap[e.Key].Length != 2)
+            {
+                throw new Exception($"Keymap has wrong length of {keyMap[e.Key].Length}.");
+            }
+
             bool isLandscape = bitmapImage.PixelWidth > bitmapImage.PixelHeight;
             string destPath = System.IO.Path.Combine(keyMap[e.Key][isLandscape ? 0 : 1], System.IO.Path.GetFileName(imageFile.FullName));
             int destPathUniqueIndex = 0;
@@ -90,8 +139,15 @@ namespace imageSorter
                 destPathUniqueIndex++;
                 destPath = System.IO.Path.Combine(keyMap[e.Key][isLandscape ? 0 : 1], $"{System.IO.Path.GetFileNameWithoutExtension(imageFile.FullName)} ({destPathUniqueIndex}){System.IO.Path.GetExtension(imageFile.FullName)}");
             }
-            File.Copy(imageFile.FullName, destPath);
+            File.Move(imageFile.FullName, destPath);
             LoadNextImage();
+        }
+
+        private void DeleteImage()
+        {
+            string imageName = imageFile.FullName;
+            LoadNextImage();
+            File.Delete(imageName);
         }
 
         private void LoadNextImage()
@@ -105,6 +161,10 @@ namespace imageSorter
             }
             imageFile = imageFiles[imageFileIndex];
             LoadImage();
+            if(bitmapImage.PixelHeight < 500 || bitmapImage.PixelWidth < 500)
+            {
+                DeleteImage();
+            }
         }
 
         private const string _orientationQuery = "System.Photo.Orientation";
